@@ -192,7 +192,7 @@ else
 	echo ""
 	echo "Which protocol do you want for OpenVPN connections?"
 	echo "   1) UDP (recommended)"
-	echo "   2) TCP"
+	echo "   2) TCP (for mikrotik)"
 	read -p "Protocol [1-2]: " -e -i 1 PROTOCOL
 	case $PROTOCOL in
 		1) 
@@ -264,7 +264,7 @@ ca ca.crt
 cert server.crt
 key server.key
 dh dh.pem
-tls-auth ta.key 0
+# tls-auth ta.key 0  # not supported by mikrotik
 topology subnet
 server 10.8.0.0 255.255.255.0
 ifconfig-pool-persist ipp.txt" > /etc/openvpn/server.conf
@@ -297,16 +297,27 @@ ifconfig-pool-persist ipp.txt" > /etc/openvpn/server.conf
 		echo 'push "dhcp-option DNS 64.6.65.6"' >> /etc/openvpn/server.conf
 		;;
 	esac
+	echo "#!/bin/bash
+exit 0
+" >> /etc/openvpn/password_script.sh
+
 	echo "keepalive 10 120
 cipher AES-256-CBC
-comp-lzo
+# comp-lzo # not supported by mikrotik
 user nobody
 group $GROUPNAME
 persist-key
 persist-tun
 status openvpn-status.log
 verb 3
-crl-verify crl.pem" >> /etc/openvpn/server.conf
+crl-verify crl.pem
+
+script-security 2 # must be at least 2
+auth-user-pass-verify password_script.sh via-file
+username-as-common-name # without this openvpn will use cn in the certificate as username
+duplicate-cn # you may need this if everyone is using same certificate
+
+" >> /etc/openvpn/server.conf
 	# Enable net.ipv4.ip_forward for the system
 	sed -i '/\<net.ipv4.ip_forward\>/c\net.ipv4.ip_forward=1' /etc/sysctl.conf
 	if ! grep -q "\<net.ipv4.ip_forward\>" /etc/sysctl.conf; then
@@ -403,7 +414,7 @@ persist-key
 persist-tun
 remote-cert-tls server
 cipher AES-256-CBC
-comp-lzo
+# comp-lzo
 setenv opt block-outside-dns
 key-direction 1
 verb 3" > /etc/openvpn/client-common.txt
